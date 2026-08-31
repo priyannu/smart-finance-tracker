@@ -1,12 +1,14 @@
 # 💰 Finance AI Pro MAX
 
-> A personal finance dashboard built with **Streamlit** — upload your bank transactions, visualize spending, get AI-powered insights and chat with a real LLM-powered financial advisor.
+> A personal finance dashboard built with **Streamlit** — upload your bank transactions, visualize spending, get AI-powered insights and chat with a real LLM-powered financial advisor using RAG, LangGraph, and Chain of Thought reasoning.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red)
 ![Plotly](https://img.shields.io/badge/Plotly-5.x-green)
 ![SQLite](https://img.shields.io/badge/Database-SQLite-lightgrey)
 ![Groq](https://img.shields.io/badge/AI-Groq%20LLM-orange)
+![LangGraph](https://img.shields.io/badge/Agent-LangGraph-purple)
+![RAG](https://img.shields.io/badge/RAG-ChromaDB-blue)
 
 ---
 
@@ -19,8 +21,52 @@ Finance AI Pro MAX is a local web app that helps you understand your personal fi
 - Renders 4 interactive charts in a 2x2 grid
 - Fires smart spending alerts when you overspend
 - Gives you 6 detailed AI insights about your spending habits
-- Lets you chat with a **real LLM advisor** (powered by Groq) about your finances
+- Lets you chat with a **real LLM advisor** powered by:
+  - 🔵 **RAG** — retrieves your actual transactions from ChromaDB before answering
+  - 🟣 **LangGraph** — multi-node agent graph for structured reasoning
+  - 🟡 **Chain of Thought** — step-by-step reasoning for accurate answers
 - Lets you filter transactions by date range
+
+---
+
+## 🧠 Gen AI Architecture
+
+```
+User Question
+      ↓
+  RAG (ChromaDB)
+  Retrieves top 5 relevant transactions
+      ↓
+  LangGraph Agent
+  ┌─────────────────────────────────┐
+  │  Node 1: understand_node        │  → Identifies the financial topic
+  │  Node 2: cot_node               │  → Chain of Thought reasoning
+  │  Node 3: validate_node          │  → Validates the response
+  └─────────────────────────────────┘
+      ↓
+  Groq LLM (Qwen model)
+  Generates final answer with context
+      ↓
+  Response shown to user
+```
+
+### 🔵 RAG (Retrieval Augmented Generation)
+- All transactions are stored in **ChromaDB** (vector database)
+- When you ask a question, the top 5 most relevant transactions are retrieved
+- The LLM answers based on your **actual transaction data**, not just summary numbers
+
+### 🟣 LangGraph
+- A 3-node agent graph built with LangGraph:
+  - `understand_node` — identifies what financial topic the question is about
+  - `cot_node` — performs Chain of Thought reasoning and generates the answer
+  - `validate_node` — ensures the response is valid before showing it
+
+### 🟡 Chain of Thought (CoT)
+- The LLM is prompted to think step by step:
+  - Step 1 — What does the financial data tell us?
+  - Step 2 — What do the relevant transactions show?
+  - Step 3 — What is the best advice?
+- Produces more accurate, reasoned answers instead of guessing
 
 ---
 
@@ -80,7 +126,6 @@ http://localhost:8501
 
 ### Step 4 — Filter by Date (optional)
 - Use the **📅 Date Filter** in the sidebar to narrow down transactions
-- Select a From and To date range
 
 ### Step 5 — Explore the pages
 
@@ -103,9 +148,10 @@ http://localhost:8501
   - Savings rate with rating (Great / OK / Low)
   - Most frequent spending category
 
-#### 💬 Advisor (Groq LLM Chatbot)
-- Powered by **Groq** — real AI, not keyword matching
-- Understands natural language questions
+#### 💬 Advisor (LangGraph + RAG + CoT)
+- Powered by **Groq + LangGraph + ChromaDB**
+- Retrieves your actual transactions before answering
+- Thinks step by step using Chain of Thought
 - Has memory of last 6 messages
 - Example questions:
   - `What is my balance?`
@@ -145,7 +191,8 @@ smart-finance-tracker/
 ├── analytics.py             # Computes income, spending, balance, savings rate
 ├── charts.py                # Generates 4 Plotly charts
 ├── ai_insights.py           # AI spending insights (6 data points)
-├── advisor.py               # Groq LLM chatbot advisor
+├── advisor.py               # LangGraph agent with CoT (3-node graph)
+├── rag.py                   # RAG module — ChromaDB vector store
 ├── report.py                # CSV export
 ├── agent.py                 # CLI version of the advisor
 ├── sample_data.csv          # Sample transactions for testing
@@ -164,8 +211,11 @@ smart-finance-tracker/
 | Data Processing | Pandas |
 | Charts | Plotly Express |
 | Database | SQLite (built-in Python) |
+| Vector Database | ChromaDB |
 | Password Security | scrypt (built-in hashlib) |
-| AI Chatbot | Groq API (Qwen model) |
+| LLM | Groq API (Qwen model) |
+| Agent Framework | LangGraph |
+| LLM Orchestration | LangChain |
 | Environment Variables | python-dotenv |
 | Language | Python 3.8+ |
 
@@ -206,6 +256,7 @@ smart-finance-tracker/
 - Categorization is keyword-based — custom merchants may fall under "Other"
 - Designed for INR (₹) transactions
 - Groq free tier has rate limits
+- ChromaDB is in-memory — resets on app restart
 
 ---
 
