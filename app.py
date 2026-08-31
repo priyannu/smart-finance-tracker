@@ -7,6 +7,7 @@ from advisor import advisor
 from report import generate_report
 from auth import create_db, login, register
 from ai_insights import generate_insights
+from rag import build_rag
 
 create_db()
 
@@ -102,6 +103,10 @@ else:
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
                 df["category"] = df["description"].apply(categorize)
 
+                # Build RAG collection
+                if "rag_collection" not in st.session_state:
+                    st.session_state.rag_collection = build_rag(df)
+
                 # ---------------- DATE FILTER ----------------
                 st.sidebar.subheader("📅 Date Filter")
                 min_date = df["date"].min().date()
@@ -175,7 +180,7 @@ else:
 
                 elif page == "💬 Advisor":
                     st.subheader("💬 AI Financial Advisor")
-                    st.caption("Powered by Groq — Ask anything about your finances")
+                    st.caption("Powered by Groq + LangGraph + RAG — Ask anything about your finances")
                     st.divider()
 
                     if "chat_history" not in st.session_state:
@@ -188,7 +193,7 @@ else:
                     if submitted and user_input.strip():
                         with st.spinner("Thinking..."):
                             try:
-                                response = advisor(user_input, metrics, st.session_state.chat_history)
+                                response = advisor(user_input, metrics, st.session_state.chat_history, st.session_state.get("rag_collection"))
                                 st.session_state.chat_history.append(("User", user_input))
                                 st.session_state.chat_history.append(("AI", response))
                             except Exception as e:

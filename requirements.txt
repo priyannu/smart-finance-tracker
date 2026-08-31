@@ -3,3 +3,8 @@ pandas
 plotly
 groq
 python-dotenv
+langchain
+langchain-groq
+langgraph
+chromadb
+sentence-transformers
