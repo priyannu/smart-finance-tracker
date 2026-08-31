@@ -17,8 +17,111 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("💰 Finance AI Pro MAX")
-st.caption("Your personal AI-powered finance dashboard")
+# ---------------- CUSTOM CSS ----------------
+st.markdown("""
+<style>
+    /* Hide default header */
+    #MainMenu, footer, header {visibility: hidden;}
+
+    /* App background */
+    .stApp { background-color: #0e1117; }
+
+    /* Hero title */
+    .hero-title {
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #00ff88, #00bfff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0;
+    }
+    .hero-sub {
+        color: #888;
+        font-size: 1rem;
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Metric cards */
+    [data-testid="metric-container"] {
+        background: #1a1f2e;
+        border: 1px solid #2a2f3e;
+        border-radius: 12px;
+        padding: 16px;
+    }
+
+    /* Chat bubbles */
+    .chat-user {
+        background: #1a3a2a;
+        border-left: 3px solid #00ff88;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        color: #e0e0e0;
+    }
+    .chat-ai {
+        background: #1a1f2e;
+        border-left: 3px solid #00bfff;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        color: #e0e0e0;
+    }
+
+    /* Insight cards */
+    .insight-card {
+        background: #1a1f2e;
+        border: 1px solid #2a2f3e;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin: 8px 0;
+        font-size: 0.95rem;
+        color: #e0e0e0;
+    }
+
+    /* Feature cards on landing */
+    .feature-card {
+        background: #1a1f2e;
+        border: 1px solid #00ff8833;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        color: #e0e0e0;
+    }
+
+    /* Divider */
+    hr { border-color: #2a2f3e; }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #12151f;
+        border-right: 1px solid #2a2f3e;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(90deg, #00ff88, #00bfff);
+        color: #000;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+    }
+    .stButton > button:hover {
+        opacity: 0.85;
+        color: #000;
+    }
+
+    /* Form submit button */
+    .stFormSubmitButton > button {
+        background: linear-gradient(90deg, #00ff88, #00bfff);
+        color: #000 !important;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+        width: 100%;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------- LOGIN SYSTEM ----------------
 if "logged_in" not in st.session_state:
@@ -29,13 +132,17 @@ choice = st.sidebar.selectbox("Menu", menu)
 
 if not st.session_state.logged_in:
 
-    # Welcome banner
-    st.info("👋 Welcome! Register or Login from the sidebar to get started.")
+    # Hero section
+    st.markdown('<p class="hero-title">💰 Finance AI Pro MAX</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Your personal AI-powered finance dashboard — RAG · LangGraph · Chain of Thought</p>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
-    col1.success("📊 Upload your transactions CSV")
-    col2.success("🤖 Get AI-powered insights")
-    col3.success("💬 Chat with your finance advisor")
+    with col1:
+        st.markdown('<div class="feature-card">📊<br><b>Smart Dashboard</b><br><span style="color:#888;font-size:0.85rem">4 interactive charts + key metrics</span></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="feature-card">🤖<br><b>AI Insights</b><br><span style="color:#888;font-size:0.85rem">6 auto-generated spending insights</span></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<div class="feature-card">💬<br><b>LLM Advisor</b><br><span style="color:#888;font-size:0.85rem">Groq + LangGraph + RAG chatbot</span></div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -73,6 +180,8 @@ if not st.session_state.logged_in:
 
 # ---------------- MAIN APP ----------------
 else:
+    # Sidebar
+    st.sidebar.markdown('<p style="color:#00ff88;font-weight:700;font-size:1.1rem">💰 Finance AI Pro MAX</p>', unsafe_allow_html=True)
     st.sidebar.success("✅ Logged in")
 
     if st.sidebar.button("Logout", use_container_width=True):
@@ -88,7 +197,11 @@ else:
     )
 
     st.sidebar.divider()
-    st.sidebar.info("📁 Upload a CSV with columns: `date`, `description`, `amount`")
+    st.sidebar.info("📁 Upload a CSV with columns:\n`date`, `description`, `amount`")
+
+    # Page header
+    st.markdown('<p class="hero-title">💰 Finance AI Pro MAX</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Your personal AI-powered finance dashboard</p>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader("📂 Upload your transaction CSV", type=["csv"])
 
@@ -103,15 +216,17 @@ else:
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
                 df["category"] = df["description"].apply(categorize)
 
-                # Build RAG collection
-                if "rag_collection" not in st.session_state:
+                # Build RAG collection — rebuild when new file uploaded
+                file_name = uploaded.name
+                if st.session_state.get("uploaded_file") != file_name:
                     st.session_state.rag_collection = build_rag(df)
+                    st.session_state.uploaded_file = file_name
+                    st.session_state.chat_history = []
 
                 # ---------------- DATE FILTER ----------------
                 st.sidebar.subheader("📅 Date Filter")
                 min_date = df["date"].min().date()
                 max_date = df["date"].max().date()
-
                 start_date = st.sidebar.date_input("From", value=min_date, min_value=min_date, max_value=max_date)
                 end_date = st.sidebar.date_input("To", value=max_date, min_value=min_date, max_value=max_date)
 
@@ -141,15 +256,16 @@ else:
                     if top_amount > metrics["income"] * 0.3:
                         st.warning(f"⚠️ High spending in **{top_category}**: ₹{top_amount:.0f} is over 30% of your income.")
 
-                # ---------------- PAGES ----------------
+                # ---------------- DASHBOARD ----------------
                 if page == "📊 Dashboard":
                     st.subheader("📊 Dashboard")
+                    st.divider()
 
                     col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("💸 Total Spending", f"₹{metrics['spending']:.2f}")
-                    col2.metric("💰 Total Income", f"₹{metrics['income']:.2f}")
-                    col3.metric("🏦 Balance", f"₹{metrics['balance']:.2f}")
-                    col4.metric("📈 Savings Rate", f"{metrics['savings_rate']:.2f}%")
+                    col1.metric("💸 Total Spending", f"₹{metrics['spending']:,.0f}")
+                    col2.metric("💰 Total Income", f"₹{metrics['income']:,.0f}")
+                    col3.metric("🏦 Balance", f"₹{metrics['balance']:,.0f}")
+                    col4.metric("📈 Savings Rate", f"{metrics['savings_rate']:.1f}%")
 
                     st.divider()
 
@@ -162,7 +278,6 @@ else:
                     col_d.plotly_chart(charts[3], use_container_width=True)
 
                     st.divider()
-
                     st.download_button(
                         "📥 Download Processed Data as CSV",
                         generate_report(df),
@@ -170,17 +285,36 @@ else:
                         use_container_width=True
                     )
 
+                # ---------------- AI INSIGHTS ----------------
                 elif page == "🤖 AI Insights":
                     st.subheader("🤖 Smart AI Insights")
                     st.caption("Automatically generated analysis of your transactions")
                     st.divider()
-                    insights = generate_insights(df)
-                    for i in insights:
-                        st.info(i)
 
+                    insights = generate_insights(df)
+                    for insight in insights:
+                        st.markdown(f'<div class="insight-card">{insight}</div>', unsafe_allow_html=True)
+
+                # ---------------- ADVISOR ----------------
                 elif page == "💬 Advisor":
                     st.subheader("💬 AI Financial Advisor")
                     st.caption("Powered by Groq + LangGraph + RAG — Ask anything about your finances")
+                    st.divider()
+
+                    # Suggested questions
+                    st.markdown("**💡 Try asking:**")
+                    cols = st.columns(3)
+                    suggestions = [
+                        "Am I overspending?",
+                        "Should I invest?",
+                        "Give me budget advice",
+                        "What is my balance?",
+                        "How can I save more?",
+                        "Can I afford a big purchase?"
+                    ]
+                    for i, s in enumerate(suggestions):
+                        cols[i % 3].markdown(f"`{s}`")
+
                     st.divider()
 
                     if "chat_history" not in st.session_state:
@@ -191,7 +325,7 @@ else:
                         submitted = st.form_submit_button("Send 💬", use_container_width=True)
 
                     if submitted and user_input.strip():
-                        with st.spinner("Thinking..."):
+                        with st.spinner("🤔 Thinking..."):
                             try:
                                 response = advisor(user_input, metrics, st.session_state.chat_history, st.session_state.get("rag_collection"))
                                 st.session_state.chat_history.append(("User", user_input))
@@ -199,14 +333,20 @@ else:
                             except Exception as e:
                                 st.error(f"Advisor error: {e}")
 
-                    for role, msg in reversed(st.session_state.chat_history):
+                    # Chat history
+                    for role, msg in st.session_state.chat_history:
                         if role == "User":
-                            st.markdown(f"🧑 **You:** {msg}")
+                            st.markdown(f'<div class="chat-user">🧑 <b>You:</b> {msg}</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f"🤖 **AI:** {msg}")
+                            st.markdown(f'<div class="chat-ai">🤖 <b>AI:</b> {msg}</div>', unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
     else:
-        st.info("👆 Upload a CSV file above to get started. You can use the `sample_data.csv` from the repo.")
+        st.markdown("""
+        <div style="background:#1a1f2e;border:1px dashed #2a2f3e;border-radius:12px;padding:30px;text-align:center;color:#888;">
+            👆 <b style="color:#e0e0e0">Upload a CSV file above to get started</b><br><br>
+            You can use the <code>sample_data.csv</code> included in the repo to try it instantly.
+        </div>
+        """, unsafe_allow_html=True)
