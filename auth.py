@@ -1,8 +1,10 @@
 import sqlite3
 import hashlib
 import os
+from dotenv import load_dotenv
 
-SALT = b"finance_ai_fixed_salt"
+load_dotenv()
+SALT = os.getenv("SCRYPT_SALT", "finance_ai_salt").encode()
 
 
 def hash_password(password):

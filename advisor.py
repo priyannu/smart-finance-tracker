@@ -17,12 +17,15 @@ The user's current financial data is:
 Give short, practical, friendly advice based on this data. 
 Always respond in 2-3 sentences max. Use ₹ for currency."""
 
+    # Limit input size to prevent abuse
+    user_input = user_input[:500]
+
     messages = [{"role": "system", "content": system_prompt}]
 
     for role, msg in history[-6:]:
         messages.append({
             "role": "user" if role == "User" else "assistant",
-            "content": msg
+            "content": msg[:500]
         })
 
     messages.append({"role": "user", "content": user_input})
@@ -30,7 +33,8 @@ Always respond in 2-3 sentences max. Use ₹ for currency."""
     response = client.chat.completions.create(
         model="qwen/qwen3.8-27b",
         messages=messages,
-        max_tokens=200
+        max_tokens=200,
+        timeout=10
     )
 
     return response.choices[0].message.content
