@@ -28,7 +28,7 @@ Always respond in 2-3 sentences max. Use ₹ for currency."""
     messages.append({"role": "user", "content": user_input})
 
     response = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model="qwen/qwen3.8-27b",
         messages=messages,
         max_tokens=200
     )
