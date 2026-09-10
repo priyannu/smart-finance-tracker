@@ -8,6 +8,7 @@ from report import generate_report
 from auth import create_db, login, register
 from ai_insights import generate_insights
 from rag import build_rag
+from risk import compute_risk_scores
 
 create_db()
 
@@ -216,7 +217,9 @@ else:
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
                 df["category"] = df["description"].apply(categorize)
 
-                # Build RAG collection — rebuild when new file uploaded
+                if "session_id" not in st.session_state:
+                    import uuid
+                    st.session_state.session_id = str(uuid.uuid4())
                 file_name = uploaded.name
                 if st.session_state.get("uploaded_file") != file_name:
                     st.session_state.rag_collection = build_rag(df)
@@ -266,6 +269,15 @@ else:
                     col2.metric("💰 Total Income", f"₹{metrics['income']:,.0f}")
                     col3.metric("🏦 Balance", f"₹{metrics['balance']:,.0f}")
                     col4.metric("📈 Savings Rate", f"{metrics['savings_rate']:.1f}%")
+
+                    # Risk Scores
+                    st.divider()
+                    risk = compute_risk_scores(df, metrics)
+                    st.markdown(f"**🛡️ Overall Financial Risk: {risk['overall']} (Score: {risk['overall_score']}/100)**")
+                    if risk["categories"]:
+                        rcols = st.columns(len(risk["categories"]))
+                        for idx, (cat, data) in enumerate(risk["categories"].items()):
+                            rcols[idx].markdown(f"**{cat}**\n\n{data['risk']}\n\n₹{data['amount']:,.0f}")
 
                     st.divider()
 
@@ -327,7 +339,7 @@ else:
                     if submitted and user_input.strip():
                         with st.spinner("🤔 Thinking..."):
                             try:
-                                response = advisor(user_input, metrics, st.session_state.chat_history, st.session_state.get("rag_collection"))
+                                response = advisor(user_input, metrics, st.session_state.chat_history, st.session_state.get("rag_collection"), st.session_state.get("session_id", "default"))
                                 st.session_state.chat_history.append(("User", user_input))
                                 st.session_state.chat_history.append(("AI", response))
                             except Exception as e:

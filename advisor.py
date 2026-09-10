@@ -1,9 +1,11 @@
 import os
-from typing import TypedDict
+from typing import TypedDict, Annotated
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
+from fcot import FinancialCoTEngine
 
 load_dotenv()
 
@@ -14,96 +16,88 @@ llm = ChatGroq(
     timeout=10
 )
 
+# MemorySaver for persistent cross-session context
+memory = MemorySaver()
+
 
 # ---------------- STATE ----------------
 class AgentState(TypedDict):
     question: str
     metrics: dict
     context: str
-    reasoning: str
+    topic: str
+    fcot_prompt: str
     answer: str
+    should_retry: bool
 
 
-# ---------------- NODE 1: Understand ----------------
+# ---------------- NODE 1: Understand (ReAct - Reason) ----------------
 def understand_node(state: AgentState) -> AgentState:
     question = state["question"][:500]
     metrics = state["metrics"]
 
-    prompt = f"""You are analyzing a finance question.
+    prompt = f"""Identify the financial topic of this question in 5 words or less.
 Question: {question}
-User finances: Income ₹{metrics['income']:.0f}, Spending ₹{metrics['spending']:.0f}, Balance ₹{metrics['balance']:.0f}, Savings Rate {metrics['savings_rate']:.1f}%
-
-Identify in one line: what financial topic is this question about?"""
+Finances: Income ₹{metrics['income']:.0f}, Spending ₹{metrics['spending']:.0f}, Savings Rate {metrics['savings_rate']:.1f}%
+Topic:"""
 
     response = llm.invoke([HumanMessage(content=prompt)])
-    state["reasoning"] = f"Topic: {response.content}"
+    state["topic"] = response.content.strip()
     return state
 
 
-# ---------------- NODE 2: Reason with CoT ----------------
-def cot_node(state: AgentState) -> AgentState:
-    question = state["question"][:500]
-    metrics = state["metrics"]
-    context = state["context"]
-    reasoning = state["reasoning"]
+# ---------------- NODE 2: F-CoT Reasoning (ReAct - Act) ----------------
+def fcot_node(state: AgentState) -> AgentState:
+    engine = FinancialCoTEngine(state["metrics"], state["context"])
+    state["fcot_prompt"] = engine.build_prompt(state["question"][:500])
+    return state
 
-    cot_prompt = f"""You are a personal finance advisor. Think step by step before answering.
 
-User's financial summary:
-- Income: ₹{metrics['income']:.0f}
-- Spending: ₹{metrics['spending']:.0f}
-- Balance: ₹{metrics['balance']:.0f}
-- Savings Rate: {metrics['savings_rate']:.1f}%
-
-Relevant transactions:
-{context}
-
-{reasoning}
-
-Question: {question}
-
-Think step by step:
-Step 1 - What does the user's financial data tell us?
-Step 2 - What do the relevant transactions show?
-Step 3 - What is the best advice based on steps 1 and 2?
-
-Final Answer (2-3 sentences, friendly tone, use ₹):"""
-
-    response = llm.invoke([HumanMessage(content=cot_prompt)])
-    state["reasoning"] += f"\nCoT reasoning completed."
+# ---------------- NODE 3: Generate Answer (ReAct - Observe) ----------------
+def generate_node(state: AgentState) -> AgentState:
+    response = llm.invoke([HumanMessage(content=state["fcot_prompt"])])
     state["answer"] = response.content
+    state["should_retry"] = False
     return state
 
 
-# ---------------- NODE 3: Validate ----------------
+# ---------------- NODE 4: Validate ----------------
 def validate_node(state: AgentState) -> AgentState:
-    answer = state["answer"]
-    if not answer or len(answer.strip()) < 10:
-        state["answer"] = "I couldn't generate a proper response. Please try rephrasing your question."
+    if not state["answer"] or len(state["answer"].strip()) < 10:
+        state["should_retry"] = True
     return state
 
 
-# ---------------- BUILD GRAPH ----------------
+# ---------------- CONDITIONAL EDGE (ReAct loop) ----------------
+def should_retry(state: AgentState) -> str:
+    if state.get("should_retry"):
+        return "generate"
+    return END
+
+
+# ---------------- BUILD REACT GRAPH ----------------
 def build_graph():
     graph = StateGraph(AgentState)
 
     graph.add_node("understand", understand_node)
-    graph.add_node("reason", cot_node)
+    graph.add_node("fcot", fcot_node)
+    graph.add_node("generate", generate_node)
     graph.add_node("validate", validate_node)
 
     graph.set_entry_point("understand")
-    graph.add_edge("understand", "reason")
-    graph.add_edge("reason", "validate")
-    graph.add_edge("validate", END)
+    graph.add_edge("understand", "fcot")
+    graph.add_edge("fcot", "generate")
+    graph.add_edge("generate", "validate")
+    graph.add_conditional_edges("validate", should_retry)
 
-    return graph.compile()
+    return graph.compile(checkpointer=memory)
 
 
 finance_graph = build_graph()
 
 
 # ---------------- MAIN ADVISOR FUNCTION ----------------
-def advisor(user_input: str, metrics: dict, history: list, collection=None) -> str:
+def advisor(user_input: str, metrics: dict, history: list, collection=None, session_id: str = "default") -> str:
     context = ""
     if collection:
         from rag import retrieve
@@ -113,9 +107,13 @@ def advisor(user_input: str, metrics: dict, history: list, collection=None) -> s
         question=user_input,
         metrics=metrics,
         context=context,
-        reasoning="",
-        answer=""
+        topic="",
+        fcot_prompt="",
+        answer="",
+        should_retry=False
     )
 
-    result = finance_graph.invoke(state)
+    # MemorySaver uses thread_id for persistent cross-session context
+    config = {"configurable": {"thread_id": session_id}}
+    result = finance_graph.invoke(state, config=config)
     return result["answer"]
