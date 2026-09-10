@@ -1,14 +1,15 @@
 # 💰 Finance AI Pro MAX
 
-> A personal finance dashboard built with **Streamlit** — upload your bank transactions, visualize spending, get AI-powered insights and chat with a real LLM-powered financial advisor using RAG, LangGraph, and Chain of Thought reasoning.
+> A personal finance dashboard built with **Streamlit** — upload your bank transactions, visualize spending, get AI-powered insights and chat with a real LLM-powered financial advisor using RAG, LangGraph ReAct Agent, F-CoT reasoning, and MemorySaver.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red)
 ![Plotly](https://img.shields.io/badge/Plotly-5.x-green)
 ![SQLite](https://img.shields.io/badge/Database-SQLite-lightgrey)
 ![Groq](https://img.shields.io/badge/AI-Groq%20LLM-orange)
-![LangGraph](https://img.shields.io/badge/Agent-LangGraph-purple)
+![LangGraph](https://img.shields.io/badge/Agent-LangGraph%20ReAct-purple)
 ![RAG](https://img.shields.io/badge/RAG-ChromaDB-blue)
+![Memory](https://img.shields.io/badge/Memory-MemorySaver-green)
 
 ---
 
@@ -19,12 +20,13 @@ Finance AI Pro MAX is a local web app that helps you understand your personal fi
 - Categorizes every transaction (Food, Transport, Shopping, Healthcare, etc.)
 - Shows your income, spending, balance, and savings rate
 - Renders 4 interactive charts in a 2x2 grid
-- Fires smart spending alerts when you overspend
+- Computes **per-category risk scores** and fires guardrail alerts on threshold breaches
 - Gives you 6 detailed AI insights about your spending habits
 - Lets you chat with a **real LLM advisor** powered by:
   - 🔵 **RAG** — retrieves your actual transactions from ChromaDB before answering
-  - 🟣 **LangGraph** — multi-node agent graph for structured reasoning
-  - 🟡 **Chain of Thought** — step-by-step reasoning for accurate answers
+  - 🟣 **LangGraph ReAct Agent** — stateful 4-node agent with conditional retry loop
+  - 🟡 **F-CoT Engine** — custom Financial Chain-of-Thought reasoning class
+  - 🟢 **MemorySaver** — persistent cross-session context via LangGraph checkpointing
 - Lets you filter transactions by date range
 
 ---
@@ -37,36 +39,54 @@ User Question
   RAG (ChromaDB)
   Retrieves top 5 relevant transactions
       ↓
-  LangGraph Agent
-  ┌─────────────────────────────────┐
-  │  Node 1: understand_node        │  → Identifies the financial topic
-  │  Node 2: cot_node               │  → Chain of Thought reasoning
-  │  Node 3: validate_node          │  → Validates the response
-  └─────────────────────────────────┘
+  LangGraph ReAct Agent (MemorySaver)
+  ┌──────────────────────────────────────────┐
+  │  Node 1: understand_node  (Reason)       │  → Identifies financial topic
+  │  Node 2: fcot_node        (Act)          │  → Runs F-CoT Engine
+  │  Node 3: generate_node    (Observe)      │  → Generates LLM answer
+  │  Node 4: validate_node    (Check)        │  → Validates response
+  │          ↓ retry if invalid              │
+  │          └──────────────────────────────→│
+  └──────────────────────────────────────────┘
       ↓
   Groq LLM (Qwen model)
-  Generates final answer with context
+  Generates final answer with F-CoT context
       ↓
   Response shown to user
 ```
 
 ### 🔵 RAG (Retrieval Augmented Generation)
-- All transactions are stored in **ChromaDB** (vector database)
-- When you ask a question, the top 5 most relevant transactions are retrieved
-- The LLM answers based on your **actual transaction data**, not just summary numbers
+- All transactions stored in **ChromaDB** (vector database)
+- Top 5 most relevant transactions retrieved per question
+- LLM answers based on **actual transaction data**, not just summary numbers
 
-### 🟣 LangGraph
-- A 3-node agent graph built with LangGraph:
-  - `understand_node` — identifies what financial topic the question is about
-  - `cot_node` — performs Chain of Thought reasoning and generates the answer
-  - `validate_node` — ensures the response is valid before showing it
+### 🟣 LangGraph ReAct Agent
+- Stateful 4-node agent graph with **conditional retry loop**:
+  - `understand_node` — Reason: identifies the financial topic
+  - `fcot_node` — Act: runs the F-CoT reasoning engine
+  - `generate_node` — Observe: generates the LLM answer
+  - `validate_node` — Check: retries if answer is invalid
+- ReAct pattern: **Reason → Act → Observe → loop if needed**
 
-### 🟡 Chain of Thought (CoT)
-- The LLM is prompted to think step by step:
-  - Step 1 — What does the financial data tell us?
-  - Step 2 — What do the relevant transactions show?
-  - Step 3 — What is the best advice?
-- Produces more accurate, reasoned answers instead of guessing
+### 🟡 Financial Chain-of-Thought (F-CoT) Engine
+- A dedicated `FinancialCoTEngine` class in `fcot.py`
+- Structures reasoning into 3 steps before building the LLM prompt:
+  - Step 1 — Financial analysis (income, spending, savings status)
+  - Step 2 — Transaction analysis (retrieved RAG context)
+  - Step 3 — Risk assessment (score + level from risk engine)
+- Produces accurate, grounded answers instead of hallucinations
+
+### 🟢 MemorySaver
+- LangGraph's built-in `MemorySaver` checkpointer
+- Each user session gets a unique `thread_id`
+- Context persists **across questions** in the same session
+- Agent remembers previous questions and answers
+
+### 🛡️ Budget Guardrail System
+- `risk.py` computes per-category risk scores against income thresholds
+- 4 risk levels: 🟢 LOW → 🟡 MEDIUM → 🟠 HIGH → 🔴 CRITICAL
+- Auto-triggers alerts when spending breaches category thresholds
+- Overall financial risk score (0–100) shown on dashboard
 
 ---
 
@@ -131,7 +151,8 @@ http://localhost:8501
 
 #### 📊 Dashboard
 - View 4 key metrics: Spending, Income, Balance, Savings Rate
-- Automatic spending alerts if you overspend
+- **🛡️ Risk Guardrail Panel** — per-category risk scores with 🟢🟡🟠🔴 levels
+- Automatic spending alerts on threshold breaches
 - 4 interactive charts in a 2x2 grid:
   - Pie chart — spending by category
   - Bar chart — category comparison
@@ -148,11 +169,11 @@ http://localhost:8501
   - Savings rate with rating (Great / OK / Low)
   - Most frequent spending category
 
-#### 💬 Advisor (LangGraph + RAG + CoT)
-- Powered by **Groq + LangGraph + ChromaDB**
+#### 💬 Advisor (ReAct + RAG + F-CoT + MemorySaver)
+- Powered by **Groq + LangGraph ReAct + ChromaDB + F-CoT**
 - Retrieves your actual transactions before answering
-- Thinks step by step using Chain of Thought
-- Has memory of last 6 messages
+- Reasons step by step using the F-CoT engine
+- Remembers context across questions in the same session
 - Example questions:
   - `What is my balance?`
   - `Am I overspending?`
@@ -191,8 +212,10 @@ smart-finance-tracker/
 ├── analytics.py             # Computes income, spending, balance, savings rate
 ├── charts.py                # Generates 4 Plotly charts
 ├── ai_insights.py           # AI spending insights (6 data points)
-├── advisor.py               # LangGraph agent with CoT (3-node graph)
+├── advisor.py               # LangGraph ReAct agent with MemorySaver
+├── fcot.py                  # Financial Chain-of-Thought (F-CoT) reasoning engine
 ├── rag.py                   # RAG module — ChromaDB vector store
+├── risk.py                  # Budget guardrail — per-category risk scoring
 ├── report.py                # CSV export
 ├── agent.py                 # CLI version of the advisor
 ├── sample_data.csv          # Sample transactions for testing
@@ -214,7 +237,10 @@ smart-finance-tracker/
 | Vector Database | ChromaDB |
 | Password Security | scrypt (built-in hashlib) |
 | LLM | Groq API (Qwen model) |
-| Agent Framework | LangGraph |
+| Agent Framework | LangGraph ReAct |
+| Memory | LangGraph MemorySaver |
+| Reasoning Engine | Custom F-CoT (fcot.py) |
+| Risk Scoring | Custom Guardrail Engine (risk.py) |
 | LLM Orchestration | LangChain |
 | Environment Variables | python-dotenv |
 | Language | Python 3.8+ |
